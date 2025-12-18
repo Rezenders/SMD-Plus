@@ -7,9 +7,18 @@ from scipy.io import loadmat
 # -----------------------------
 # Hardcode paths + image size
 # -----------------------------
-# MAT_DIR = Path("/datasets/smd_plus/VIS_Onboard/ObjectGT")
-MAT_DIR = Path("/datasets/smd_plus/VIS_Onshore/ObjectGT")
-OUTPUT_DIR = Path("/datasets/smd_plus/labels")    # output root
+MAT_DIRS = [Path("/datasets/smd_plus/VIS_Onshore/ObjectGT"),
+            Path("/datasets/smd_plus/VIS_Onboard/ObjectGT")]
+OUT_ROOT = Path("/datasets/smd_plus/labels")
+
+TRAINING_VIDEOS_PREFIXES = [
+    'MVI_1451', 'MVI_1452', 'MVI_1470', 'MVI_1471', 'MVI_1478', 'MVI_1479',
+    'MVI_1481', 'MVI_1482', 'MVI_1483', 'MVI_1484', 'MVI_1485', 'MVI_1486',
+    'MVI_1578', 'MVI_1582', 'MVI_1583', 'MVI_1584', 'MVI_1609', 'MVI_1610',
+    'MVI_1612', 'MVI_1617', 'MVI_1619', 'MVI_1620', 'MVI_1622', 'MVI_1623',
+    'MVI_1624', 'MVI_1625', 'MVI_1626', 'MVI_1627', 'MVI_0788', 'MVI_0789',
+    'MVI_0790', 'MVI_0792', 'MVI_0794', 'MVI_0795', 'MVI_0796', 'MVI_0797',
+    'MVI_0801' ]
 
 IMG_W = 1920  # set to your frame width
 IMG_H = 1080  # set to your frame height
@@ -30,7 +39,7 @@ CLASS_MAP = {
     "Other": 6,
 }
 
-MAT_VAR_PREFERRED = "structXML"  # in your example file
+MAT_VAR = "structXML"  # in your example file
 
 
 def unwrap_scalar(v):
@@ -60,34 +69,35 @@ def yolo_line_from_xywh(x, y, w, h, class_id: int) -> str:
     return f"{class_id} {xc:.6f} {yc:.6f} {wn:.6f} {hn:.6f}"
 
 
-def pick_mat_var(mat: dict) -> str:
-    if MAT_VAR_PREFERRED in mat:
-        return MAT_VAR_PREFERRED
-    keys = [k for k in mat.keys() if not k.startswith("__")]
-    if not keys:
-        raise RuntimeError("No usable variables found in .mat file.")
-    return keys[0]
-
-
 def main():
     if IMG_W <= 0 or IMG_H <= 0:
         raise ValueError("Set IMG_W and IMG_H to the frame resolution.")
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    OUT_ROOT.mkdir(parents=True, exist_ok=True)
+    train_path = OUT_ROOT / 'train'
+    val_path = OUT_ROOT / 'val'
 
-    # Optional: save classes for your YOLO data.yaml
-    classes_txt = OUTPUT_DIR / "classes.txt"
-    class_names = [name for name, idx in sorted(CLASS_MAP.items(), key=lambda kv: kv[1])]
+    train_path.mkdir(parents=True, exist_ok=True)
+    val_path.mkdir(parents=True, exist_ok=True)
+
+    classes_txt = OUT_ROOT / "classes.txt"
+    class_names = [name for name, _ in sorted(CLASS_MAP.items(), key=lambda kv: kv[1])]
     classes_txt.write_text("\n".join(class_names) + "\n")
 
-    mat_files = sorted(MAT_DIR.glob("*.mat"))
-    if not mat_files:
-        raise FileNotFoundError(f"No .mat files found in: {MAT_DIR}")
+    mat_files = []
+    for MAT_DIR in MAT_DIRS:
+        mat_files.extend(MAT_DIR.glob("*.mat"))
+    mat_files = sorted(mat_files)
 
+    if not mat_files:
+        raise FileNotFoundError(f"No .mat files found in: {MAT_DIRS}")
+
+    frame_id = 0
+    skipped_count = 0
+    skipped_files = []
     for mat_path in mat_files:
         mat = loadmat(mat_path, squeeze_me=True, struct_as_record=False)
-        var = pick_mat_var(mat)
-        records = mat[var]
+        records = mat[MAT_VAR]
 
         # records is typically an object array of MATLAB structs
         if isinstance(records, np.ndarray):
@@ -95,12 +105,11 @@ def main():
         else:
             records_iter = [records]
 
-        out_dir = OUTPUT_DIR / mat_path.stem
-        out_dir.mkdir(parents=True, exist_ok=True)
+        out_dir = train_path if any(mat_path.stem.startswith(prefix) for prefix in TRAINING_VIDEOS_PREFIXES) else val_path
 
         n_frames = 0
         n_boxes = 0
-        for frame_id, rec in enumerate(records_iter):
+        for rec in records_iter:
             bb = np.array(getattr(rec, "BB"))
             bb = bb.reshape(-1, 4) if bb.size else bb.reshape(0, 4)
 
@@ -127,10 +136,15 @@ def main():
 
             (out_dir / f"{frame_id:06d}.txt").write_text("\n".join(lines) + ("\n" if lines else ""))
             n_frames += 1
+            frame_id += 1
 
         print(f"[OK] {mat_path.name} -> {out_dir} | frames: {n_frames}, boxes: {n_boxes}")
 
     print(f"[OK] Wrote classes to: {classes_txt}")
+    print(f"total frames processed: {frame_id}")
+    # print(f"[INFO] Skipped {skipped_count} boxes in total.")
+    # for fname, fid in skipped_files:
+    #     print(f"       - {fname}, frame ID: {fid}")
 
 
 if __name__ == "__main__":
