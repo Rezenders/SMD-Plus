@@ -92,10 +92,8 @@ def main():
     if not mat_files:
         raise FileNotFoundError(f"No .mat files found in: {MAT_DIRS}")
 
-    frame_id = 0
-    skipped_count = 0
-    skipped_files = []
     for mat_path in mat_files:
+        frame_id = 0
         mat = loadmat(mat_path, squeeze_me=True, struct_as_record=False)
         records = mat[MAT_VAR]
 
@@ -105,7 +103,10 @@ def main():
         else:
             records_iter = [records]
 
-        out_dir = train_path if any(mat_path.stem.startswith(prefix) for prefix in TRAINING_VIDEOS_PREFIXES) else val_path
+        prefix = '_'.join(mat_path.stem.split('_')[:2])
+        out_dir = train_path if prefix in TRAINING_VIDEOS_PREFIXES else val_path
+        out_dir = out_dir / prefix
+        out_dir.mkdir(parents=True, exist_ok=True)
 
         n_frames = 0
         n_boxes = 0
@@ -141,10 +142,6 @@ def main():
         print(f"[OK] {mat_path.name} -> {out_dir} | frames: {n_frames}, boxes: {n_boxes}")
 
     print(f"[OK] Wrote classes to: {classes_txt}")
-    print(f"total frames processed: {frame_id}")
-    # print(f"[INFO] Skipped {skipped_count} boxes in total.")
-    # for fname, fid in skipped_files:
-    #     print(f"       - {fname}, frame ID: {fid}")
 
 
 if __name__ == "__main__":

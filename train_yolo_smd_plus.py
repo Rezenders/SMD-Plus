@@ -3,8 +3,8 @@ from pathlib import Path
 
 
 def main():
-    dataset_root = Path("/datasets/smd_plus/MVI_0788_VIS")
-    data_yaml = dataset_root / "smd_plus_MVI_0788.yaml"  # must already exist
+    dataset_root = Path("/datasets/smd_plus")
+    data_yaml = dataset_root / "smd_plus.yaml"  # must already exist
 
     if not data_yaml.exists():
         raise FileNotFoundError(f"Dataset YAML not found: {data_yaml}")

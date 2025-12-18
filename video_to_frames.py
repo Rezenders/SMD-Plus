@@ -15,12 +15,14 @@ TRAINING_VIDEOS_PREFIXES = [
     'MVI_0790', 'MVI_0792', 'MVI_0794', 'MVI_0795', 'MVI_0796', 'MVI_0797',
     'MVI_0801' ]
 
-def extract_all_frames(video_path: Path, out_dir: Path, frame_start_id: int) -> None:
+def extract_all_frames(video_path: Path, out_dir: Path) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         raise RuntimeError(f"Cannot open video: {video_path}")
 
-    frame_id = frame_start_id
+    frame_id = 0
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -35,7 +37,7 @@ def extract_all_frames(video_path: Path, out_dir: Path, frame_start_id: int) -> 
 
     cap.release()
     print(f"[OK] {video_path.name}: saved {frame_id} frames to {out_dir}")
-    return frame_id
+    # return frame_id
 
 
 def main():
@@ -53,11 +55,13 @@ def main():
     if not videos:
         raise FileNotFoundError(f"No .avi videos found in: {VIDEO_DIR}")
 
-    frame_start_id = 0
     for vp in videos:
-        out_dir = train_path if any(vp.stem.startswith(prefix) for prefix in TRAINING_VIDEOS_PREFIXES) else val_path
+        prefix = '_'.join(vp.stem.split('_')[:2])
+        out_dir = train_path if prefix in TRAINING_VIDEOS_PREFIXES else val_path
+        out_dir = out_dir / prefix
+
         print(f"[INFO] Processing {vp.name}: saving frames to {out_dir} set.")
-        frame_start_id = extract_all_frames(vp, out_dir, frame_start_id)
+        extract_all_frames(vp, out_dir)
 
 
 if __name__ == "__main__":
